@@ -1,6 +1,6 @@
 # misc-tools
 
-A collection of small **command-line utilities**
+A collection of small command line tools
 
 ---
 
