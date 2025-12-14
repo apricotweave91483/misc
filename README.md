@@ -25,7 +25,7 @@ A macOS-only CLI tool for sending text messages.
 
 **Purpose**
 - Send Messages texts from the terminal
-- Maybe good for scripting texts
+- Maybe scripting texts
 
 ---
 
