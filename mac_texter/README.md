@@ -54,7 +54,7 @@ this will:
 3. create new conversations for each provided name
 4. send the provided message
 
-## limitations
+## notes
 
 - macOS only
 - fragile by nature (GUI automation depends on timing and UI state)
