@@ -109,13 +109,4 @@ clink cmp lb main.c -o test.c
 
 ## Why this exists
 
-- keep C utilities modular during development
-- avoid manual copy/paste
-- generate single-file C output when needed
-- stay close to how C actually compiles
-
----
-
-## License
-
-Do whatever you want with it.
+- generate single-file C output and avoid manual copy/paste
