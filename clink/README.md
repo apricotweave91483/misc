@@ -3,9 +3,6 @@
 `clink.py` is a tiny C “linker” (really: a concatenator) that lets you keep reusable C helper
 code in a `C_Utils` folder and then generate a single final `.c` file.
 
-This is meant for small projects, experiments, and competitive-programming-style workflows
-where you want modular development but single-file output.
-
 ---
 
 ## Setup (recommended)
