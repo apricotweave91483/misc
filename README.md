@@ -11,7 +11,7 @@ A Python utility for concatenating C source files.
 - Combine a main C file with reusable utility `.c` files (e.g. from a `C_Utils/` folder)
 - Emit a single final `.c` file for compilation
 
-More info in that folders README
+More info in that folder's README
 
 ---
 
