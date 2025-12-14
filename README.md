@@ -26,7 +26,7 @@ A macOS-only CLI tool for sending text messages.
 **Purpose**
 - Send Messages texts from the terminal
 - Uses macOS GUI automation
-- Useful for quick notifications or scripts that need to ping a phone
+- Maybe scripts that need to ping a phone
 
 ---
 
