@@ -1,3 +1,19 @@
+"""
+Momentum-Based Paper Trading Algorithm using yfinance
+
+This algorithm implements a momentum strategy that:
+1. Calculates momentum scores for a universe of stocks
+2. Ranks stocks by momentum
+3. Simulates long/short positions
+4. Rebalances periodically
+5. Tracks portfolio value in positions.txt
+6. Handles weekends and market holidays
+7. Saves state for restarts
+
+Requirements:
+pip install yfinance pandas numpy pandas-market-calendars
+"""
+
 import yfinance as yf
 import pandas as pd
 import numpy as np
@@ -50,7 +66,110 @@ class MomentumTradingStrategy:
         
         self.last_rebalance = None
         self.positions_file = 'positions.txt'
+        self.state_file = 'trading_state.json'
         
+        # Load saved state if exists
+        self.load_state()
+        
+    def is_market_open_day(self):
+        """Check if today is a trading day (weekday, not holiday)."""
+        now = datetime.now()
+        
+        # Check if weekend
+        if now.weekday() >= 5:  # Saturday = 5, Sunday = 6
+            return False
+        
+        # Check common US market holidays
+        year = now.year
+        holidays = [
+            datetime(year, 1, 1),   # New Year's Day
+            datetime(year, 7, 4),   # Independence Day
+            datetime(year, 12, 25), # Christmas
+        ]
+        
+        # Move holiday to Friday if it falls on Saturday, Monday if Sunday
+        adjusted_holidays = []
+        for holiday in holidays:
+            if holiday.weekday() == 5:  # Saturday
+                adjusted_holidays.append(holiday - timedelta(days=1))
+            elif holiday.weekday() == 6:  # Sunday
+                adjusted_holidays.append(holiday + timedelta(days=1))
+            else:
+                adjusted_holidays.append(holiday)
+        
+        today = now.date()
+        return today not in [h.date() for h in adjusted_holidays]
+    
+    def next_market_open(self):
+        """Calculate when the next market day is."""
+        now = datetime.now()
+        next_day = now + timedelta(days=1)
+        
+        while not self.is_market_open_day_check(next_day):
+            next_day += timedelta(days=1)
+        
+        return next_day
+    
+    def is_market_open_day_check(self, check_date):
+        """Check if a specific date is a trading day."""
+        # Check if weekend
+        if check_date.weekday() >= 5:
+            return False
+        
+        # Check common US market holidays
+        year = check_date.year
+        holidays = [
+            datetime(year, 1, 1),
+            datetime(year, 7, 4),
+            datetime(year, 12, 25),
+        ]
+        
+        adjusted_holidays = []
+        for holiday in holidays:
+            if holiday.weekday() == 5:
+                adjusted_holidays.append(holiday - timedelta(days=1))
+            elif holiday.weekday() == 6:
+                adjusted_holidays.append(holiday + timedelta(days=1))
+            else:
+                adjusted_holidays.append(holiday)
+        
+        check = check_date.date()
+        return check not in [h.date() for h in adjusted_holidays]
+    
+    def save_state(self):
+        """Save current strategy state to JSON file."""
+        try:
+            state = {
+                'cash': self.cash,
+                'positions': self.positions,
+                'last_rebalance': self.last_rebalance.isoformat() if self.last_rebalance else None,
+                'initial_capital': self.initial_capital
+            }
+            
+            with open(self.state_file, 'w') as f:
+                json.dump(state, f, indent=2)
+            
+            logger.info(f"State saved to {self.state_file}")
+        except Exception as e:
+            logger.error(f"Error saving state: {e}")
+    
+    def load_state(self):
+        """Load strategy state from JSON file if it exists."""
+        try:
+            if os.path.exists(self.state_file):
+                with open(self.state_file, 'r') as f:
+                    state = json.load(f)
+                
+                self.cash = state['cash']
+                self.positions = state['positions']
+                self.last_rebalance = datetime.fromisoformat(state['last_rebalance']) if state['last_rebalance'] else None
+                self.initial_capital = state['initial_capital']
+                
+                logger.info(f"State loaded from {self.state_file}")
+                logger.info(f"Cash: ${self.cash:,.2f}, Positions: {len(self.positions)}")
+        except Exception as e:
+            logger.error(f"Error loading state: {e}")
+    
     def get_current_price(self, symbol):
         """Get current price for a symbol."""
         try:
@@ -124,7 +243,10 @@ class MomentumTradingStrategy:
                 if self.last_rebalance:
                     f.write(f"Last Rebalance: {self.last_rebalance.strftime('%Y-%m-%d %H:%M:%S')}\n")
                     days_since = (datetime.now() - self.last_rebalance).days
-                    f.write(f"Next Rebalance: In {self.rebalance_period - days_since} days\n")
+                    next_rebalance_days = max(0, self.rebalance_period - days_since)
+                    f.write(f"Next Rebalance: In {next_rebalance_days} market days\n")
+                
+                f.write(f"Market Status: {'OPEN' if self.is_market_open_day() else 'CLOSED'}\n")
                 
             logger.info(f"Portfolio written to {self.positions_file}")
             
@@ -295,7 +417,8 @@ class MomentumTradingStrategy:
         logger.info(f"\nRebalance completed at {self.last_rebalance}")
         logger.info("="*60 + "\n")
         
-        # Write positions to file
+        # Save state and write positions
+        self.save_state()
         self.write_positions_to_file()
     
     def should_rebalance(self):
@@ -306,66 +429,79 @@ class MomentumTradingStrategy:
         days_since_rebalance = (datetime.now() - self.last_rebalance).days
         return days_since_rebalance >= self.rebalance_period
     
-    def run(self, single_run=False):
+    def run_continuous(self):
         """
-        Main execution loop.
-        
-        Args:
-            single_run: If True, run once and exit. If False, run continuously.
+        Continuous execution loop that handles weekends and holidays.
         """
-        logger.info("Starting Momentum Trading Strategy")
+        logger.info("Starting Momentum Trading Strategy (Continuous Mode)")
         logger.info(f"Initial Capital: ${self.initial_capital:,.2f}")
         logger.info(f"Lookback Period: {self.lookback_period} days")
         logger.info(f"Rebalance Period: {self.rebalance_period} days")
         logger.info(f"Long Positions: {self.num_long}")
         logger.info(f"Short Positions: {self.num_short}\n")
         
-        if single_run:
-            # Run once and exit
-            self.rebalance_portfolio()
-            
-            # Show final portfolio
-            portfolio_value = self.calculate_portfolio_value()
-            logger.info(f"\nFinal Portfolio Value: ${portfolio_value:,.2f}")
-            logger.info(f"Total P&L: ${portfolio_value - self.initial_capital:,.2f} "
-                       f"({((portfolio_value / self.initial_capital - 1) * 100):.2f}%)")
-        else:
-            # Continuous execution
-            while True:
-                try:
-                    if self.should_rebalance():
-                        self.rebalance_portfolio()
-                    else:
-                        days_left = self.rebalance_period - (datetime.now() - self.last_rebalance).days
-                        logger.info(f"Next rebalance in {days_left} days")
-                        
-                        # Update positions file even when not rebalancing
-                        self.write_positions_to_file()
+        while True:
+            try:
+                now = datetime.now()
+                
+                # Check if market is open today
+                if not self.is_market_open_day():
+                    next_open = self.next_market_open()
+                    logger.info(f"Market is closed (Weekend/Holiday)")
+                    logger.info(f"Next market day: {next_open.strftime('%Y-%m-%d')}")
+                    logger.info("Sleeping until next market day...\n")
                     
-                    # Wait before next check (1 day)
-                    logger.info("Waiting for next check...\n")
-                    time.sleep(86400)  # 24 hours
-                    
-                except KeyboardInterrupt:
-                    logger.info("Strategy stopped by user")
+                    # Update positions file even when market is closed
                     self.write_positions_to_file()
-                    break
-                except Exception as e:
-                    logger.error(f"Error in main loop: {e}")
-                    time.sleep(60)
+                    
+                    # Sleep until next day
+                    time.sleep(43200)  # 12 hours
+                    continue
+                
+                # Market is open - check if we should rebalance
+                if self.should_rebalance():
+                    logger.info("Market is open - executing rebalance...")
+                    self.rebalance_portfolio()
+                else:
+                    days_left = self.rebalance_period - (datetime.now() - self.last_rebalance).days
+                    logger.info(f"Market is open - Next rebalance in {days_left} market days")
+                    
+                    # Update positions file
+                    self.write_positions_to_file()
+                
+                # Check again in 4 hours
+                logger.info("Sleeping for 4 hours before next check...\n")
+                time.sleep(14400)  # 4 hours
+                
+            except KeyboardInterrupt:
+                logger.info("\nStrategy stopped by user")
+                self.save_state()
+                self.write_positions_to_file()
+                logger.info("State saved. You can restart anytime!")
+                break
+            except Exception as e:
+                logger.error(f"Error in main loop: {e}")
+                logger.info("Retrying in 5 minutes...")
+                time.sleep(300)
 
 
 def main():
     """
     Main entry point for the trading algorithm.
     No API keys needed - uses yfinance!
+    
+    Just run this and leave it - it handles everything:
+    - Runs immediately if market is open
+    - Waits over weekends automatically
+    - Saves state so you can stop/restart anytime
+    - Updates positions.txt regularly
     """
     
     # Initialize strategy with $100,000 starting capital
     strategy = MomentumTradingStrategy(initial_capital=100000)
     
-    # Run once for testing (set to False for continuous operation)
-    strategy.run(single_run=True)
+    # Run continuously
+    strategy.run_continuous()
 
 
 if __name__ == "__main__":
