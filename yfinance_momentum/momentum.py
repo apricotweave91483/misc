@@ -7,21 +7,22 @@ This algorithm implements a momentum strategy that:
 3. Simulates long/short positions
 4. Rebalances periodically
 5. Tracks portfolio value in positions.txt
-6. Handles weekends and market holidays
+6. Handles weekends, holidays, and market hours (ET timezone aware)
 7. Saves state for restarts
 
 Requirements:
-pip install yfinance pandas numpy pandas-market-calendars
+pip install yfinance pandas numpy pytz
 """
 
 import yfinance as yf
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time as dt_time
 import time
 import logging
 import json
 import os
+import pytz
 
 # Configure logging
 logging.basicConfig(
@@ -68,50 +69,37 @@ class MomentumTradingStrategy:
         self.positions_file = 'positions.txt'
         self.state_file = 'trading_state.json'
         
+        # Timezone setup
+        self.et_tz = pytz.timezone('America/New_York')
+        
         # Load saved state if exists
         self.load_state()
         
-    def is_market_open_day(self):
-        """Check if today is a trading day (weekday, not holiday)."""
-        now = datetime.now()
+    def get_et_time(self):
+        """Get current time in Eastern Time."""
+        return datetime.now(self.et_tz)
+    
+    def is_market_hours(self):
+        """Check if market is currently open (9:30 AM - 4:00 PM ET)."""
+        et_now = self.get_et_time()
         
-        # Check if weekend
-        if now.weekday() >= 5:  # Saturday = 5, Sunday = 6
+        # Check if weekday
+        if et_now.weekday() >= 5:  # Saturday = 5, Sunday = 6
             return False
         
-        # Check common US market holidays
-        year = now.year
-        holidays = [
-            datetime(year, 1, 1),   # New Year's Day
-            datetime(year, 7, 4),   # Independence Day
-            datetime(year, 12, 25), # Christmas
-        ]
+        # Check if holiday
+        if not self.is_trading_day(et_now):
+            return False
         
-        # Move holiday to Friday if it falls on Saturday, Monday if Sunday
-        adjusted_holidays = []
-        for holiday in holidays:
-            if holiday.weekday() == 5:  # Saturday
-                adjusted_holidays.append(holiday - timedelta(days=1))
-            elif holiday.weekday() == 6:  # Sunday
-                adjusted_holidays.append(holiday + timedelta(days=1))
-            else:
-                adjusted_holidays.append(holiday)
+        # Check if within market hours (9:30 AM - 4:00 PM ET)
+        market_open = dt_time(9, 30)
+        market_close = dt_time(16, 0)
+        current_time = et_now.time()
         
-        today = now.date()
-        return today not in [h.date() for h in adjusted_holidays]
+        return market_open <= current_time <= market_close
     
-    def next_market_open(self):
-        """Calculate when the next market day is."""
-        now = datetime.now()
-        next_day = now + timedelta(days=1)
-        
-        while not self.is_market_open_day_check(next_day):
-            next_day += timedelta(days=1)
-        
-        return next_day
-    
-    def is_market_open_day_check(self, check_date):
-        """Check if a specific date is a trading day."""
+    def is_trading_day(self, check_date):
+        """Check if a specific date is a trading day (not weekend/holiday)."""
         # Check if weekend
         if check_date.weekday() >= 5:
             return False
@@ -119,22 +107,48 @@ class MomentumTradingStrategy:
         # Check common US market holidays
         year = check_date.year
         holidays = [
-            datetime(year, 1, 1),
-            datetime(year, 7, 4),
-            datetime(year, 12, 25),
+            datetime(year, 1, 1),   # New Year's Day
+            datetime(year, 7, 4),   # Independence Day
+            datetime(year, 12, 25), # Christmas
+            # Add more holidays as needed
         ]
         
+        # Adjust holidays that fall on weekends
         adjusted_holidays = []
         for holiday in holidays:
-            if holiday.weekday() == 5:
+            if holiday.weekday() == 5:  # Saturday -> observe Friday
                 adjusted_holidays.append(holiday - timedelta(days=1))
-            elif holiday.weekday() == 6:
+            elif holiday.weekday() == 6:  # Sunday -> observe Monday
                 adjusted_holidays.append(holiday + timedelta(days=1))
             else:
                 adjusted_holidays.append(holiday)
         
         check = check_date.date()
         return check not in [h.date() for h in adjusted_holidays]
+    
+    def next_trading_day(self):
+        """Calculate the next trading day at market open."""
+        et_now = self.get_et_time()
+        next_day = et_now + timedelta(days=1)
+        next_day = next_day.replace(hour=9, minute=30, second=0, microsecond=0)
+        
+        while not self.is_trading_day(next_day):
+            next_day += timedelta(days=1)
+        
+        return next_day
+    
+    def seconds_until_market_open(self):
+        """Calculate seconds until next market open."""
+        et_now = self.get_et_time()
+        
+        # If it's a trading day but before market open
+        if self.is_trading_day(et_now) and et_now.time() < dt_time(9, 30):
+            market_open_today = et_now.replace(hour=9, minute=30, second=0, microsecond=0)
+            return (market_open_today - et_now).total_seconds()
+        
+        # Otherwise, get next trading day
+        next_open = self.next_trading_day()
+        return (next_open - et_now).total_seconds()
     
     def save_state(self):
         """Save current strategy state to JSON file."""
@@ -204,10 +218,11 @@ class MomentumTradingStrategy:
         """Write current portfolio state to positions.txt."""
         try:
             portfolio_value = self.calculate_portfolio_value()
+            et_now = self.get_et_time()
             
             with open(self.positions_file, 'w') as f:
                 f.write("="*80 + "\n")
-                f.write(f"PORTFOLIO STATUS - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"PORTFOLIO STATUS - {et_now.strftime('%Y-%m-%d %I:%M:%S %p %Z')}\n")
                 f.write("="*80 + "\n\n")
                 
                 f.write(f"Initial Capital:    ${self.initial_capital:,.2f}\n")
@@ -241,12 +256,18 @@ class MomentumTradingStrategy:
                 f.write("\n" + "="*80 + "\n")
                 
                 if self.last_rebalance:
-                    f.write(f"Last Rebalance: {self.last_rebalance.strftime('%Y-%m-%d %H:%M:%S')}\n")
-                    days_since = (datetime.now() - self.last_rebalance).days
+                    f.write(f"Last Rebalance: {self.last_rebalance.strftime('%Y-%m-%d %I:%M:%S %p')}\n")
+                    days_since = (et_now - self.last_rebalance).days
                     next_rebalance_days = max(0, self.rebalance_period - days_since)
-                    f.write(f"Next Rebalance: In {next_rebalance_days} market days\n")
+                    f.write(f"Next Rebalance: In {next_rebalance_days} trading days\n")
                 
-                f.write(f"Market Status: {'OPEN' if self.is_market_open_day() else 'CLOSED'}\n")
+                market_status = "OPEN" if self.is_market_hours() else "CLOSED"
+                f.write(f"Market Status: {market_status}\n")
+                
+                if not self.is_market_hours():
+                    seconds_until = self.seconds_until_market_open()
+                    hours_until = seconds_until / 3600
+                    f.write(f"Market opens in: {hours_until:.1f} hours\n")
                 
             logger.info(f"Portfolio written to {self.positions_file}")
             
@@ -413,8 +434,8 @@ class MomentumTradingStrategy:
         # Execute new trades
         self.execute_trades(long_symbols, short_symbols)
         
-        self.last_rebalance = datetime.now()
-        logger.info(f"\nRebalance completed at {self.last_rebalance}")
+        self.last_rebalance = self.get_et_time()
+        logger.info(f"\nRebalance completed at {self.last_rebalance.strftime('%Y-%m-%d %I:%M:%S %p %Z')}")
         logger.info("="*60 + "\n")
         
         # Save state and write positions
@@ -422,59 +443,76 @@ class MomentumTradingStrategy:
         self.write_positions_to_file()
     
     def should_rebalance(self):
-        """Check if it's time to rebalance."""
+        """Check if it's time to rebalance (only counts trading days)."""
         if self.last_rebalance is None:
             return True
         
-        days_since_rebalance = (datetime.now() - self.last_rebalance).days
-        return days_since_rebalance >= self.rebalance_period
+        et_now = self.get_et_time()
+        days_since = (et_now - self.last_rebalance).days
+        
+        return days_since >= self.rebalance_period
     
     def run_continuous(self):
         """
-        Continuous execution loop that handles weekends and holidays.
+        Continuous execution loop that handles market hours, weekends, and holidays.
         """
         logger.info("Starting Momentum Trading Strategy (Continuous Mode)")
         logger.info(f"Initial Capital: ${self.initial_capital:,.2f}")
         logger.info(f"Lookback Period: {self.lookback_period} days")
         logger.info(f"Rebalance Period: {self.rebalance_period} days")
         logger.info(f"Long Positions: {self.num_long}")
-        logger.info(f"Short Positions: {self.num_short}\n")
+        logger.info(f"Short Positions: {self.num_short}")
+        
+        et_now = self.get_et_time()
+        logger.info(f"Current time: {et_now.strftime('%Y-%m-%d %I:%M:%S %p %Z')}")
+        logger.info(f"Market is: {'OPEN' if self.is_market_hours() else 'CLOSED'}\n")
         
         while True:
             try:
-                now = datetime.now()
+                et_now = self.get_et_time()
                 
-                # Check if market is open today
-                if not self.is_market_open_day():
-                    next_open = self.next_market_open()
-                    logger.info(f"Market is closed (Weekend/Holiday)")
-                    logger.info(f"Next market day: {next_open.strftime('%Y-%m-%d')}")
-                    logger.info("Sleeping until next market day...\n")
+                # Check if market is currently open
+                if not self.is_market_hours():
+                    seconds_until = self.seconds_until_market_open()
+                    hours_until = seconds_until / 3600
+                    next_open = self.next_trading_day()
                     
-                    # Update positions file even when market is closed
+                    logger.info(f"Market is CLOSED")
+                    logger.info(f"Next market open: {next_open.strftime('%Y-%m-%d %I:%M %p %Z')}")
+                    logger.info(f"Time until open: {hours_until:.1f} hours")
+                    
+                    # Update positions file
                     self.write_positions_to_file()
                     
-                    # Sleep until next day
-                    time.sleep(43200)  # 12 hours
+                    # Sleep for a reasonable time (check every hour when market is closed)
+                    sleep_time = min(3600, seconds_until)
+                    logger.info(f"Sleeping for {sleep_time/60:.0f} minutes...\n")
+                    time.sleep(sleep_time)
                     continue
                 
                 # Market is open - check if we should rebalance
+                logger.info(f"Market is OPEN")
+                
                 if self.should_rebalance():
-                    logger.info("Market is open - executing rebalance...")
+                    logger.info("Time to rebalance!")
                     self.rebalance_portfolio()
                 else:
-                    days_left = self.rebalance_period - (datetime.now() - self.last_rebalance).days
-                    logger.info(f"Market is open - Next rebalance in {days_left} market days")
+                    if self.last_rebalance:
+                        days_since = (et_now - self.last_rebalance).days
+                        days_left = self.rebalance_period - days_since
+                        logger.info(f"Next rebalance in {days_left} trading days")
                     
                     # Update positions file
                     self.write_positions_to_file()
                 
-                # Check again in 4 hours
-                logger.info("Sleeping for 4 hours before next check...\n")
-                time.sleep(14400)  # 4 hours
+                # Check again in 1 hour during market hours
+                logger.info("Sleeping for 1 hour before next check...\n")
+                time.sleep(3600)
                 
             except KeyboardInterrupt:
-                logger.info("\nStrategy stopped by user")
+                logger.info("\n" + "="*60)
+                logger.info("Strategy stopped by user")
+                logger.info("="*60)
                 self.save_state()
                 self.write_positions_to_file()
                 logger.info("State saved. You can restart anytime!")
@@ -488,11 +526,11 @@ class MomentumTradingStrategy:
 def main():
     """
     Main entry point for the trading algorithm.
-    No API keys needed - uses yfinance!
     
-    Just run this and leave it - it handles everything:
-    - Runs immediately if market is open
-    - Waits over weekends automatically
+    Just run this RIGHT NOW and leave it - it handles everything:
+    - Detects if market is open/closed (uses ET timezone)
+    - Waits until Monday if it's the weekend
+    - Runs first rebalance when market opens
     - Saves state so you can stop/restart anytime
     - Updates positions.txt regularly
     """
