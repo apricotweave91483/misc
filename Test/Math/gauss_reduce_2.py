@@ -111,15 +111,10 @@ def interp_system():
     
     return "INF. SOLUTIONS"
 
-for i in range(int(input())):
-    system.append(array(list(map(Fraction, input().split()))))
-
-ref_system()
-print("\nREF:")
-print_system()
-
-rref_system()
-print("\nRREF:")
-print_system()
-
-print("ANS:", interp_system())
+for _ in range(int(input())):
+    system = []
+    for i in range(int(input())):
+        system.append(array(list(map(Fraction, input().split()))))
+    ref_system()
+    rref_system()
+    print("ANS:", interp_system())
