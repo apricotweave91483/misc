@@ -109,13 +109,31 @@ def interp_system():
         return ans
 
     return 1
+pivots = set()
+free = set()
+
+def param_solution():
+    # Only to be used if it was determined that there are infinite solutions
+    global pivots, free
+    cols = range(len(system[0]) - 1)
+    
+    for row in system:
+        for x in range(len(row)):
+            if row[x]:
+                pivots.add(x)
+                break
+    for x in cols:
+        if not x in pivots:
+            free.add(x)
+
+    
 
 def print_answer(answer):
     if not answer:
         print("Inconsistent / No Solution.")
 
     elif isinstance(answer, tuple):
-        print("(" + ", ".join([f"x{i}" for i in range(1, len(answer) + 1)]) + ")" + " = " + "(" + ", ".join(answer) + ")")
+        print("(" + ", ".join([f"x{i}" for i in range(len(answer))]) + ")" + " = " + "(" + ", ".join(answer) + ")")
 
     elif answer == 1:
         print("Infinite Solutions.")
@@ -129,4 +147,5 @@ rref_system()
 print("\nrref:")
 print_system()
 print_answer(interp_system())
-
+param_solution()
+print("pivots:", pivots, "\nfree:", free)
