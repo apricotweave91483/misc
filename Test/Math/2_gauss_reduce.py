@@ -87,8 +87,7 @@ def rref_system():
         t -= 1
     return
         
-def interp_system():
-    
+def interp_system():    
     # Is it consistent?
     for row in system:
         zeroed = 1
@@ -97,7 +96,7 @@ def interp_system():
                 zeroed = 0
                 break
         if zeroed and row[-1]:
-            return "NO SOLUTION"
+            return None
 
     rank = 0
     for row in system:
@@ -106,10 +105,20 @@ def interp_system():
                 rank += 1
                 break
     if rank == len(system):
-        return "ONE SOLUTION"
+        ans = tuple([str(system[x][-1]) for x in range(rank)])
+        return ans
 
-    
-    return "INF. SOLUTIONS"
+    return 1
+
+def print_answer(answer):
+    if not answer:
+        print("Inconsistent / No Solution.")
+
+    elif isinstance(answer, tuple):
+        print("(" + ", ".join([f"X{i}" for i in range(1, len(answer) + 1)]) + ")" + " = " + "(" + ", ".join(answer) + ")")
+
+    elif answer == 1:
+        print("Infinite Solutions.")
 
 for _ in range(int(input())):
     system = []
@@ -117,4 +126,6 @@ for _ in range(int(input())):
         system.append(array(list(map(Fraction, input().split()))))
     ref_system()
     rref_system()
-    print("ANS:", interp_system())
+    
+    print_answer(interp_system())
+
