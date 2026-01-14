@@ -105,7 +105,7 @@ def interp_system():
                 rank += 1
                 break
     if rank == len(system[0]) - 1:
-        ans = tuple([str(system[x][-1]) for x in range(rank)])
+        ans = tuple([system[x][-1] for x in range(rank)])
         return ans
 
     return 1
@@ -115,7 +115,8 @@ def print_answer(answer):
         print("Inconsistent / No Solution.")
 
     elif isinstance(answer, tuple):
-        print("(" + ", ".join([f"x{i}" for i in range(1, len(answer) + 1)]) + ")" + " = " + "(" + ", ".join(answer) + ")")
+        
+        print("(" + ", ".join([f"x{i}" for i in range(len(answer))]) + ")" + " = " + "(" + ", ".join([str(x) for x in answer]) + ")")
 
     elif answer == 1:
         print("Infinite Solutions.")
