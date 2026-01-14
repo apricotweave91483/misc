@@ -78,6 +78,8 @@ def rref_system():
             if row[i]:
                 last_pivot = (row_num, i)
                 break
+    if last_pivot == (-1, -1):
+        exit(1)
     t = last_pivot[0]
     while t:
         for i in range(last_pivot[0] - 1, -1, -1):
