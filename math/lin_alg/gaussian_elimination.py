@@ -175,6 +175,7 @@ def print_answer(answer):
         print("Inconsistent / No Solution.")
 
     elif isinstance(answer, tuple):
+        print("Single Solution:")
         print("(" + ", ".join([f"x{i}" for i in range(len(answer))]) + ")" + " = " + "(" + ", ".join([str(x) for x in answer]) + ")")
 
     elif answer == 1:
