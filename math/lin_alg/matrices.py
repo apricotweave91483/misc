@@ -3,6 +3,7 @@ import numpy as np
 
 class Matrix:
     def __init__(self, dt, _input=None):
+        SYSTEM = None
         if dt == "F":
             self.DTYPE = Fraction
         elif dt == "D":
@@ -13,8 +14,6 @@ class Matrix:
             self.SYSTEM = np.array(_input, dtype=self.DTYPE)
             self.total_row = len(self.SYSTEM)
             self.total_column = len(self.SYSTEM[0])
-        else:
-            SYSTEM = None
 
     def take(self):
         self.SYSTEM = np.array([list(map(self.DTYPE, input().split())) for i in range(int(input()))])
