@@ -3,7 +3,7 @@ import numpy as np
 
 class Matrix:
     def __init__(self, dt, _input=None):
-        SYSTEM = None
+        self.SYSTEM = None
         if dt == "F":
             self.DTYPE = Fraction
         elif dt == "D":
