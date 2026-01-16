@@ -14,7 +14,7 @@ class Matrix:
             self.total_row = len(self.SYSTEM)
             self.total_column = len(self.SYSTEM[0])
 
-    def input_matrix(self):
+    def take(self):
         self.SYSTEM = np.array([list(map(self.DTYPE, input().split())) for i in range(int(input()))])
         self.total_row = len(self.SYSTEM)
         self.total_column = len(self.SYSTEM[0])
@@ -137,7 +137,7 @@ class Matrix:
         # No Solution
         for row in self.SYSTEM:
             nz = (np.nonzero(row))[0]
-            if len(nz) == 1 and nz[0] == self.total_row - 1:
+            if len(nz) == 1 and nz[0] == self.total_column - 1:
                 return 0
     
         pivots = self.find_pivots()
