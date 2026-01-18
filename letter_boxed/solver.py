@@ -1,6 +1,7 @@
 #!/opt/homebrew/bin/python3
 
-s = input("enter: ")
+from sys import argv
+s = argv[1]
 s1 = set(s[0:3])
 s2 = set(s[3:6])
 s3 = set(s[6:9])
