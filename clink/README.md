@@ -1,13 +1,3 @@
-`clink.py` is a tiny C “linker” (really: a concatenator) that lets you keep reusable C helper
-code in a `C_Utils` folder and then generate a single final `.c` file.
-
----
-
-## recommended
-alias clink="python3 /full/path/to/clink.py"
-
-## how it works
-
 Given a command like:
 
 ```bash
