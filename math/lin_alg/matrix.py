@@ -7,23 +7,27 @@ class Matrix:
             self.DTYPE = Fraction
         elif dt == "D":
             self.DTYPE = np.float64
+        elif dt == "I":
+            self.DTYPE = np.int64
         else:
             exit(1)
-        if _input != None:
+        if not _input is None:
             self.SYSTEM = np.array(_input, dtype=self.DTYPE)
             self.total_row = len(self.SYSTEM)
             self.total_column = len(self.SYSTEM[0])
+        else:
+            self.SYSTEM = None
+    def __repr__(self):
+        if self.SYSTEM is None:
+            return "NULL"
+        strd_rows = [list(map(str, [x for x in row])) for row in self.SYSTEM]
+        s = "\n".join(" ".join(x for x in row) for row in strd_rows)
+        return "Matrix[\n" + s + "\n]"
 
     def take(self):
         self.SYSTEM = np.array([list(map(self.DTYPE, input().split())) for i in range(int(input()))])
         self.total_row = len(self.SYSTEM)
         self.total_column = len(self.SYSTEM[0])
-
-    def show(self):
-        for row in self.SYSTEM:
-            for x in row:
-                print(str(x), end="  ")
-            print()
 
     def first_nonzero(self, array):
         z = (np.nonzero(array))[0]
@@ -32,6 +36,17 @@ class Matrix:
             return z[0]
 
         return np.inf
+
+    def det(self):
+        def __det__(system) -> int:
+            def sys_without(SYS, i):
+                return [[row[j] for j in range(len(row)) if j != i] for row in SYS[1:]]
+            if len(system) == 2:
+                return (system[0][0] * system[-1][-1]) - (system[-1][0] * system[0][-1])
+            else:
+                return sum(((-1) ** x) * system[0][x] * __det__(sys_without(system, x)) for x in range(len(system[0])))
+        return __det__(self.SYSTEM)
+
 
     def make_swap(self, start):
         F = self.first_nonzero(self.SYSTEM[start])
@@ -163,11 +178,11 @@ class Matrix:
             elif self.DTYPE is Fraction:
                 return f + " = " + "[" + "  ".join(str(x) for x in interpretation) + "]"
             else:
-                return f + " = " + interpretation
+                return f + " = " + str(interpretation)
+
     def solve(self):
         self.ref()
         self.rref()
         print(self.get_solution())
 
         return
-
