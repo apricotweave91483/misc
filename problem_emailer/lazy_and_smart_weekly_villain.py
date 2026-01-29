@@ -1,16 +1,23 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 """
 Weekly Villain - LeetCode Hard Problem
-Emails a hard LeetCode problem every Sunday at midnight.
+Emails a hard LeetCode problem every Saturday at midnight.
+Lazy version: caches API results for 4 weeks.
 """
 
 import requests
 import random
 import time
 import smtplib
+import json
+import os
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta
+
+SENT_PROBLEMS_FILE = "sent_problems.json"
+PROBLEMS_CACHE_FILE = "problems_cache.json"
+CACHE_DURATION_WEEKS = 4  # Refresh problem list every 4 weeks
 
 def load_sent_problems():
     """Load the set of sent problems from file."""
@@ -103,7 +110,8 @@ def fetch_problems():
     print("Fetching fresh problems from LeetCode API...")
     
     try:
-        url = "https://alfa-leetcode-api.onrender.com/problems?difficulty=HARD"
+        # Use a large limit to get all hard problems (there are ~700-800 total)
+        url = "https://alfa-leetcode-api.onrender.com/problems?difficulty=HARD&limit=2000"
         
         response = requests.get(url)
         response.raise_for_status()
@@ -237,22 +245,6 @@ The darkness stirs...
         print(f"❌ Initialization failed: {e}")
         return False
 
-def send_villain_email_with_retry(problem, recipient_email, smtp_server, smtp_port, sender_email, sender_password, max_retries=5):
-    """Send the weekly villain problem via email with retries."""
-    for attempt in range(max_retries):
-        success = send_villain_email(problem, recipient_email, smtp_server, smtp_port, sender_email, sender_password)
-        
-        if success:
-            return True
-        
-        # If not the last attempt, wait and retry
-        if attempt < max_retries - 1:
-            wait_time = random.randint(30, 180)  # Random wait between 30 seconds and 3 minutes
-            print(f"⚠️  Retry {attempt + 1}/{max_retries - 1} in {wait_time} seconds...")
-            time.sleep(wait_time)
-    
-    return False
-
 def send_villain_email(problem, recipient_email, smtp_server, smtp_port, sender_email, sender_password):
     """Send the weekly villain problem via email."""
     title = problem.get('title', 'Unknown')
@@ -321,6 +313,22 @@ The clock is ticking... ⚔️
         print(f"❌ Failed to dispatch villain: {e}")
         return False
 
+def send_villain_email_with_retry(problem, recipient_email, smtp_server, smtp_port, sender_email, sender_password, max_retries=5):
+    """Send the weekly villain problem via email with retries."""
+    for attempt in range(max_retries):
+        success = send_villain_email(problem, recipient_email, smtp_server, smtp_port, sender_email, sender_password)
+        
+        if success:
+            return True
+        
+        # If not the last attempt, wait and retry
+        if attempt < max_retries - 1:
+            wait_time = random.randint(30, 180)  # Random wait between 30 seconds and 3 minutes
+            print(f"⚠️  Retry {attempt + 1}/{max_retries - 1} in {wait_time} seconds...")
+            time.sleep(wait_time)
+    
+    return False
+
 def display_villain(problem):
     """Display villain information in a formatted way."""
     title = problem.get('title', 'Unknown')
@@ -379,7 +387,7 @@ def main():
     print(f"Problems cached to: {PROBLEMS_CACHE_FILE} (refreshed every {CACHE_DURATION_WEEKS} weeks)")
     print("Press Ctrl+C to stop\n")
     
-    # Fetch hard problems
+    # Fetch hard problems (with caching)
     all_problems = fetch_problems()
     
     if not all_problems:
