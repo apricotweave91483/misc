@@ -1,0 +1,3 @@
+sender=misc41916@gmail.com
+password=udegqiqnmvbxodhq
+to_email=marioalemany16@gmail.com
