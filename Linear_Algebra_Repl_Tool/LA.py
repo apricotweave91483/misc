@@ -516,6 +516,10 @@ class Vector:
             raise ValueError("Cannot normalize zero vector")
         # Convert magnitude to Fraction for division
         return self / Fraction(str(mag))
+
+    def floats(self) -> Tuple[float, ...]:
+        """Return vector components as a tuple of floats."""
+        return tuple(float(c) for c in self.components)
     
     def copy(self):
         """Return a copy of the vector."""
@@ -906,6 +910,43 @@ class Matrix:
         if scalar == 0:
             raise ValueError("Cannot divide by zero")
         return self * (Fraction(1) / scalar)
+
+    def __pow__(self, exponent, modulo=None):
+        """
+        Matrix exponentiation for integer powers.
+        Supports negative powers via matrix inverse.
+        """
+        if modulo is not None:
+            raise TypeError("Modulo is not supported for Matrix exponentiation")
+        if not isinstance(exponent, int):
+            raise TypeError("Matrix exponent must be an integer")
+        if self.num_rows != self.num_cols:
+            raise ValueError("Matrix exponentiation is only defined for square matrices")
+
+        # Identity matrix for exponent 0 and iterative accumulation.
+        identity = Matrix([
+            [Fraction(1) if i == j else Fraction(0) for j in range(self.num_cols)]
+            for i in range(self.num_rows)
+        ])
+
+        if exponent == 0:
+            return identity
+        if exponent < 0:
+            return (self.inverse()) ** (-exponent)
+
+        # Exponentiation by squaring for efficiency.
+        result = identity
+        base = self.copy()
+        n = exponent
+
+        while n > 0:
+            if n % 2 == 1:
+                result = result * base
+            n //= 2
+            if n > 0:
+                base = base * base
+
+        return result
     
     # Elementary Row Operations
     def swap_rows(self, i, j):

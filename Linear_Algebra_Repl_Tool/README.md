@@ -47,6 +47,9 @@ B = Matrix.FS("2\n1 2\n3 4")
 v = Vector([1, 1])
 Av = A * v
 
+# get float tuple from vector components
+vf = Vector(["1/2", "2", "3/4"]).floats()
+
 # row reduction
 R = A.rref()
 
@@ -54,6 +57,11 @@ R = A.rref()
 d = A.determinant()
 A_inv = A.inverse()
 r = A.rank()
+
+# matrix powers (good for markov transitions)
+A10 = A ** 10
+# negative power works too (inverse power)
+A_inv2 = A ** -2
 
 # solve a system (augmented matrix: last col is rhs)
 S = System.FS("1 2 5\n3 4 11")
@@ -82,4 +90,3 @@ everything is currently in:
 
 - `LA.py`
 
-it's calm
